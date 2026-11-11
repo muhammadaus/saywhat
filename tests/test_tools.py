@@ -64,7 +64,8 @@ def test_score_without_target_or_recording_explains(store):
 def test_dictionary_actions(store):
     rt, tools, _ = make(store)
     assert call(tools.dictionary, action="add", term="pgvector")["new"] is True
-    taught = call(tools.dictionary, action="teach", term="EKS", heard_as="x")
+    for _ in range(5):  # repeating a model-made teach must not add up to "automatic"
+        taught = call(tools.dictionary, action="teach", term="EKS", heard_as="x")
     assert taught["success"]
     listed = call(tools.dictionary, action="list")
     assert listed["automatic"] == {} and listed["mishearings"] == {"x": {"EKS": 1}}  # model-made: not automatic

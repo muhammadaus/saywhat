@@ -151,7 +151,10 @@ class Tools:
                 if not heard or len(heard) > MAX_TERM_CHARS:
                     return _err("teach needs heard_as: what recognition produces instead of the term.")
                 full = self.rt.setting("auto_correct_after")
-                d.record_correction(heard, term, weight=full if user_confirmed else 1)
+                if user_confirmed:
+                    d.record_correction(heard, term, weight=full)
+                else:
+                    d.suggest_correction(heard, term)
                 return _ok(taught={heard: term}, note=(
                     "Applied automatically from the next recording." if user_confirmed else
                     f"Offered first from now on; automatic after the user confirms it {full - 1} more time(s)."))

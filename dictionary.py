@@ -80,6 +80,18 @@ class PersonalDictionary:
         entry["count"] += weight
         self._save(data)
 
+    def suggest_correction(self, heard: str, chosen: str) -> None:
+        """A model-made suggestion: worth one confirmation however often it is repeated, so it
+        is offered first but only goes automatic after the user picks it themselves."""
+        key = normalize(heard)
+        if not key or not chosen.strip() or key == normalize(chosen):
+            return
+        data = self._load()
+        counts = data["corrections"].setdefault(key, {})
+        counts[chosen.strip()] = max(counts.get(chosen.strip(), 0), 1)
+        data["terms"].setdefault(chosen.strip(), {"count": 1, "source": "suggested", "added": int(time.time())})
+        self._save(data)
+
     def corrections(self) -> dict[str, dict[str, int]]:
         return self._load()["corrections"]
 
