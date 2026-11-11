@@ -38,7 +38,7 @@ DICTIONARY = {
         "Manage the user's personal voice dictionary, which biases speech recognition toward their "
         "vocabulary. action 'list' shows terms and learned mishearings; 'add' adds a term (e.g. a "
         "product or library name); 'remove' forgets a term; 'teach' tells saywhat that what it hears "
-        "as heard_as should always become term (applied automatically from then on)."),
+        "as heard_as means term (offered first from then on, and automatic once the user confirms it)."),
     "parameters": {
         "type": "object",
         "properties": {
