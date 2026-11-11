@@ -12,6 +12,8 @@ SENTENCE_Q = "saywhat: Which did you say?"
 WORD_BY_WORD = "None of these: let me pick word by word"
 _WORD_Q = re.compile(r"^saywhat: What did you mean by '(.+)'\?$")
 _PROMPT_TERMS = 40
+MAX_TERM_CHARS = 64        # longest word-level answer saywhat will learn
+MAX_SENTENCE_CHARS = 1000  # longest sentence answer saywhat will diff against what it heard
 
 
 def word_question(heard: str) -> str:
@@ -103,22 +105,29 @@ def make_post_tool_call(rt: Runtime):
         utt = rt.pending_clarification()
         if not ours or utt is None:
             return None
+        # Only words saywhat itself flagged can be taught; a question naming anything else
+        # (a drifting or prompt-injected model) must not write to the persistent dictionary.
+        flagged = {normalize(sp["heard"]): sp["heard"] for sp in utt["spans"]}
         done = False
         for resp in ours:
             answer = resp.get("user_response")
             if resp.get("status") != "answered" or not isinstance(answer, str) or not answer.strip():
                 continue
+            answer = answer.strip()
             if resp["question"] == SENTENCE_Q:
-                if answer.strip() == WORD_BY_WORD:
+                if answer == WORD_BY_WORD or len(answer) > MAX_SENTENCE_CHARS:
                     continue
                 _learn_from_sentence(rt, utt, answer)
-                rt.mark(utt, confirmed_text=answer.strip())
+                rt.mark(utt, confirmed_text=answer)
                 done = True
-            elif (m := _WORD_Q.match(resp["question"])) and normalize(m.group(1)) != normalize(answer):
-                rt.dictionary.record_correction(m.group(1), answer.strip())
-                done = True
-            elif m:
-                done = True  # the user confirmed the word was heard right
+                continue
+            m = _WORD_Q.match(resp["question"])
+            heard = flagged.get(normalize(m.group(1))) if m else None
+            if heard is None or len(answer) > MAX_TERM_CHARS:
+                continue
+            if normalize(heard) != normalize(answer):
+                rt.dictionary.record_correction(heard, answer)
+            done = True  # a same-word answer confirms it was heard right
         if done:
             rt.mark(utt, resolved=True)
             stats = rt.store.get("stats", None) or {}

@@ -94,3 +94,13 @@ def test_practice_mode_routes_to_scoring(store):
     rt.set_practice_target(INTENDED)
     ctx = make_pre_llm_call(rt)(user_message=rt.last_utterance()["text"])
     assert "saywhat_practice" in ctx["context"] and "clarify" not in ctx["context"]
+
+
+def test_answers_about_unflagged_words_are_not_learned(store):
+    rt = runtime(store)
+    make_pre_llm_call(rt)(user_message=rt.last_utterance()["text"])
+    make_post_tool_call(rt)(tool_name="clarify", result=clarify_result(
+        (word_question("manifest"), "rm -rf"), (word_question("anything"), "evil"),
+        (word_question("x"), "y" * 200)))
+    assert rt.dictionary.corrections() == {}
+    assert not rt.last_utterance()["resolved"]
