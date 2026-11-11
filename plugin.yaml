@@ -20,7 +20,7 @@ provides_hooks:
   - pre_llm_call
   - post_tool_call
 config_schema:
-  model: {type: str, default: base, label: Whisper model, choices: [tiny, base, small, medium, large-v3, distil-large-v3, turbo], description: "faster-whisper model size; larger is more accurate and slower."}
+  whisper_model: {type: str, default: base, label: Whisper model, choices: [tiny, base, small, medium, large-v3, distil-large-v3, turbo], description: "faster-whisper model size; larger is more accurate and slower."}
   language: {type: str, default: "", label: Language, description: "BCP-47 hint such as en or ja; empty auto-detects."}
   device: {type: str, default: auto, label: Device, choices: [auto, cpu, cuda], description: "Where faster-whisper runs."}
   threshold: {type: float, default: 0.6, label: Ask below confidence, description: "Words the recognizer is less sure of than this (0-1) are confirmed with you."}

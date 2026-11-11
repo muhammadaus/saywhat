@@ -91,3 +91,9 @@ def test_tts_failure_is_reported_not_raised(store):
     tools = Tools(rt, lambda p: None, lambda name, args: json.dumps({"success": False, "error": "no tts"}))
     out = call(tools.practice, action="start", text="hello")
     assert out["success"] and out["model"] == {"error": "no tts"}
+
+
+def test_setting_keys_avoid_hermes_reserved_roots():
+    # PluginContext.get_config rejects these roots (hermes_cli/plugins_state.py).
+    from saywhat.runtime import DEFAULTS
+    assert not {k.split(".")[0] for k in DEFAULTS} & {"model", "plugins", "security", "settings"}

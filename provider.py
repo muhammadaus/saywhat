@@ -46,7 +46,7 @@ def transcribe_utterance(runtime: Runtime, recognizer: Recognizer, file_path: st
                          model: Optional[str] = None, language: Optional[str] = None,
                          prompt: Optional[str] = None, source: str = "") -> dict:
     """Recognize ``file_path``, re-listen around uncertain words, and return the utterance."""
-    model = model or runtime.setting("model")
+    model = model or runtime.setting("whisper_model")
     language = language or runtime.setting("language") or None
     device = runtime.setting("device")
     # While practising, listen like a stranger would: no personal vocabulary, no learned fixes,
@@ -97,7 +97,7 @@ class SaywhatTranscriptionProvider(TranscriptionProvider):
         return [{"id": m, "display": m} for m in MODELS]
 
     def default_model(self) -> Optional[str]:
-        return self._runtime.setting("model")
+        return self._runtime.setting("whisper_model")
 
     def transcribe(self, file_path: str, *, model: Optional[str] = None,
                    language: Optional[str] = None, **extra: Any) -> dict[str, Any]:

@@ -11,7 +11,7 @@ from .align import normalize
 from .dictionary import PersonalDictionary
 
 DEFAULTS: dict[str, Any] = {
-    "model": "base",
+    "whisper_model": "base",
     "language": "",
     "device": "auto",
     "threshold": 0.6,
