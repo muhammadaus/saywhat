@@ -78,3 +78,10 @@ def test_confident_near_miss_of_personal_term_is_questioned():
     assert u["spans"][0]["heard"] == "gvector" and u["spans"][0]["candidates"][0]["text"] == "pgvector"
     assert analyze([{"w": "pgvector", "p": .9, "s": 0, "e": 0}], vocabulary=[("pgvector", ())], corrections={},
                    auto={}, threshold=0.6, personal=("pgvector",))["spans"] == []
+
+
+def test_hearing_a_personal_term_is_not_second_guessed():
+    words = [{"w": w, "p": p, "s": 0, "e": 0} for w, p in [("the", .99), ("EKS", .41), ("cluster", .9)]]
+    u = analyze(words, vocabulary=[("EKS", ()), ("X", ())], corrections={"eks": {"X": 1}}, auto={},
+                threshold=0.6, alt_text="the X cluster", personal=("EKS",))
+    assert u["spans"] == []

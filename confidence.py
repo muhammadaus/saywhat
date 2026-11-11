@@ -18,6 +18,7 @@ MIN_MATCH = 0.7          # sound-alike score needed to offer a vocabulary term
 WINDOW_BONUS = 0.8       # a two-word window must score this well to widen a span
 AUTO_TRUST = 0.9         # never auto-correct a word the recognizer was this sure of
 MAX_READINGS = 3         # leaves the 4th clarify slot for "pick word by word"
+PERSONAL_HEARD = 0.95    # as-heard score for a word that is one of the user's own terms
 PERSONAL_NEAR_MISS = 0.9  # confident words this close to a personal term are still questioned
 NEIGHBOUR_MAX_P = 0.95   # only a not-quite-sure neighbour may join a span
 _FUNCTION_WORDS = frozenset(
@@ -109,7 +110,7 @@ def _alt_replacement(words: list[dict], i: int, j: int, alt_text: str | None) ->
     return region if region and normalize(region) != normalize(" ".join(heard[i:j])) else None
 
 
-def _span(words, i, j, vocabulary, corrections, alt_text, max_candidates, threshold):
+def _span(words, i, j, vocabulary, corrections, alt_text, max_candidates, threshold, personal=frozenset()):
     heard = _strip_punct(_join(words[i:j]))
     p = min(w["p"] for w in words[i:j])
     cands: dict[str, dict] = {}
@@ -138,7 +139,10 @@ def _span(words, i, j, vocabulary, corrections, alt_text, max_candidates, thresh
         # A partial re-listen ("gvector") supports the term it resembles rather than competing.
         twin = next((c["text"] for c in cands.values() if similarity(alt, c["text"]) >= 0.85), None)
         offer(twin or alt, 0.85, "heard on a vocabulary-biased re-listen")
-    as_heard = {"text": heard, "score": round(p, 3), "why": "as heard"}
+    # Hearing one of the user's own terms is evidence in itself, whatever the acoustic score.
+    mine = norm(heard) in personal
+    as_heard = {"text": heard, "score": round(max(p, PERSONAL_HEARD) if mine else p, 3),
+                "why": "as heard (in your dictionary)" if mine else "as heard"}
     cands.pop(norm(heard), None)
     ranked = sorted(cands.values(), key=lambda c: -c["score"])[:max(max_candidates - 1, 1)]
     ranked = sorted(ranked + [as_heard], key=lambda c: -c["score"])
@@ -202,9 +206,12 @@ def analyze(words: list[dict], *, vocabulary, corrections: dict, auto: dict[str,
         i, j = _widen(fixed, idx, idx + 1, vocabulary)
         if spans and i < spans[-1]["j"]:
             i = spans[-1]["j"]
-        spans.append(_span(fixed, i, j, vocabulary, corrections, alt_text, max_candidates, threshold))
-    # A span whose only candidate is what was heard has nothing to choose between.
-    spans = [sp for sp in spans if len(sp["candidates"]) > 1]
+        spans.append(_span(fixed, i, j, vocabulary, corrections, alt_text, max_candidates, threshold,
+                           frozenset(norm(t) for t in personal)))
+    # Nothing to ask when there is nothing to choose between, or the best choice is the user's own
+    # term exactly as heard.
+    spans = [sp for sp in spans if len(sp["candidates"]) > 1
+             and sp["candidates"][0]["why"] != "as heard (in your dictionary)"]
     return {
         "id": uuid.uuid4().hex[:12],
         "ts": time.time(),
