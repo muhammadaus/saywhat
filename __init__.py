@@ -14,8 +14,21 @@ from .tools import Tools
 TOOLSET = "saywhat"
 
 
+class _LazyState:
+    """Opens ``ctx.state`` on first use, so registering touches no files."""
+
+    def __init__(self, ctx):
+        self._ctx = ctx
+
+    def get(self, key, default=None):
+        return self._ctx.state.get(key, default)
+
+    def set(self, key, value):
+        self._ctx.state.set(key, value)
+
+
 def register(ctx, **kwargs):
-    rt = Runtime(ctx.state, ctx.get_config)
+    rt = Runtime(_LazyState(ctx), ctx.get_config)
     recognizer = Recognizer()
     ctx.register_transcription_provider(SaywhatTranscriptionProvider(rt, recognizer))
 
