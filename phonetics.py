@@ -30,9 +30,13 @@ def letters(text: str) -> str:
 
 
 def skeleton(text: str) -> str:
-    """Consonant shape of ``text``: digraphs folded, soft/hard c resolved, vowels after
-    the first letter dropped, repeated letters collapsed."""
-    s = letters(text)
+    """Consonant shape of ``text``, word by word: digraphs folded, soft/hard c resolved,
+    vowels after each word's first letter dropped, repeated letters collapsed."""
+    return "".join(_word_skeleton(w) for w in text.split())
+
+
+def _word_skeleton(word: str) -> str:
+    s = letters(word)
     if not s:
         return ""
     s = re.sub(r"c(?=[eiy])", "s", s).replace("c", "k")
@@ -49,11 +53,14 @@ def is_acronym(term: str) -> bool:
 
 
 def spoken_forms(term: str) -> list[str]:
-    """Ways ``term`` is likely to sound: as written, and letter by letter for acronyms."""
-    forms = [term]
-    if is_acronym(term):
-        forms.append("".join(_LETTER_NAMES.get(c, c) for c in letters(term)))
-    return forms
+    """Ways ``term`` is likely to sound: as written, and letter by letter for acronyms.
+    Short or vowel-less acronyms (EKS, XSS) are only ever spelled out, so they lose their written form."""
+    if not is_acronym(term):
+        # Digits are said as words: "k8s" sounds like "k eight s", never like "ks".
+        return [re.sub(r"[0-9]", lambda m: " " + _LETTER_NAMES[m.group()] + " ", term)]
+    spelled = " ".join(_LETTER_NAMES.get(c, c) for c in letters(term))
+    pronounceable = len(letters(term)) >= 4 and set(letters(term)) & set("aeiou")  # JSON, YAML, CUDA
+    return [term, spelled] if pronounceable else [spelled]
 
 
 def similarity(heard: str, term: str) -> float:
@@ -61,15 +68,19 @@ def similarity(heard: str, term: str) -> float:
     h_letters = letters(heard)
     if not h_letters:
         return 0.0
+    # A lone letter in a transcript ("x") stands for its spoken name ("ex").
+    heard_forms = [heard] + ([" ".join(_LETTER_NAMES.get(c, c) for c in h_letters)] if len(h_letters) <= 2 else [])
     best = 0.0
     for form in spoken_forms(term):
-        h_sk, t_sk = skeleton(heard), skeleton(form)
-        if not h_sk or not t_sk:
-            continue
-        score = SequenceMatcher(None, h_sk, t_sk).ratio()
-        if min(len(h_sk), len(t_sk)) <= 2 and score < 1.0:
-            score *= 0.9  # two-consonant shapes collide easily; demand more
-        best = max(best, score, 0.9 * SequenceMatcher(None, h_letters, letters(form)).ratio())
+        t_sk = skeleton(form)
+        for h_form in heard_forms:
+            h_sk = skeleton(h_form)
+            if not h_sk or not t_sk:
+                continue
+            score = SequenceMatcher(None, h_sk, t_sk).ratio()
+            if min(len(h_sk), len(t_sk)) <= 2 and score < 1.0:
+                score *= 0.9  # two-consonant shapes collide easily; demand more
+            best = max(best, score, 0.9 * SequenceMatcher(None, letters(h_form), letters(form)).ratio())
     t_letters = letters(term)
     if len(h_letters) >= 4 and h_letters in t_letters and h_letters != t_letters:
         # Recognizer dropped part of a compound ("vector" for pgvector).
