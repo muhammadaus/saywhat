@@ -1,0 +1,9 @@
+[project]
+name = "saywhat"
+version = "0.1.0"
+description = "Hermes plugin: voice input that asks instead of guessing"
+requires-python = ">=3.11"
+license = "MIT"
+dependencies = [
+    "faster-whisper>=1.1.0,<2",
+]
