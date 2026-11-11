@@ -18,6 +18,7 @@ MIN_MATCH = 0.7          # sound-alike score needed to offer a vocabulary term
 WINDOW_BONUS = 0.8       # a two-word window must score this well to widen a span
 AUTO_TRUST = 0.9         # never auto-correct a word the recognizer was this sure of
 MAX_READINGS = 3         # leaves the 4th clarify slot for "pick word by word"
+PERSONAL_NEAR_MISS = 0.9  # confident words this close to a personal term are still questioned
 NEIGHBOUR_MAX_P = 0.95   # only a not-quite-sure neighbour may join a span
 _FUNCTION_WORDS = frozenset(
     "a an the to of in on at for with and or but is are was were be it this that then than "
@@ -79,10 +80,18 @@ def _apply_auto(words: list[dict], auto: dict[str, str]) -> tuple[list[dict], li
     return out, applied
 
 
-def _low_words(words: list[dict], threshold: float) -> list[int]:
-    """Indexes of words the recognizer was unsure of (learned fixes and punctuation excluded)."""
-    return [i for i, w in enumerate(words)
-            if w["p"] < threshold and not w.get("auto") and norm(w["w"])]
+def _suspect_words(words: list[dict], threshold: float, personal: tuple[str, ...]) -> list[int]:
+    """Indexes worth asking about: words the recognizer was unsure of, plus confident near-misses
+    of the user's own terms ("gvector" when they say pgvector), which vocabulary biasing produces."""
+    out = []
+    for i, w in enumerate(words):
+        key = norm(w["w"])
+        if not key or w.get("auto"):
+            continue
+        near_miss = any(key != norm(t) and similarity(w["w"], t) >= PERSONAL_NEAR_MISS for t in personal)
+        if w["p"] < threshold or near_miss:
+            out.append(i)
+    return out
 
 
 def _alt_replacement(words: list[dict], i: int, j: int, alt_text: str | None) -> str | None:
@@ -120,7 +129,7 @@ def _span(words, i, j, vocabulary, corrections, alt_text, max_candidates, thresh
     for chosen, count in corrections.get(normalize(heard), {}).items():
         offer(chosen, 0.8 + 0.05 * count, f"you picked this {count}x before")
     # The surer the recognizer was, the closer a sound-alike must be to be worth offering.
-    bar = MIN_MATCH + (1 - MIN_MATCH) * 0.8 * min(p / threshold, 1.0)
+    bar = min(MIN_MATCH + (1 - MIN_MATCH) * 0.8 * min(p / threshold, 1.0), PERSONAL_NEAR_MISS)
     for term, score in _match_terms(heard, vocabulary)[:max_candidates]:
         if score >= bar:
             offer(term, score, "sounds alike")
@@ -182,12 +191,12 @@ def _readings(words: list[dict], spans: list[dict]) -> list[str]:
 
 def analyze(words: list[dict], *, vocabulary, corrections: dict, auto: dict[str, str],
             threshold: float, max_candidates: int = 4, alt_text: str | None = None,
-            source: str = "") -> dict:
+            source: str = "", personal=()) -> dict:
     """Build the utterance record for one transcription."""
     raw_text = _join(words)
     fixed, applied = _apply_auto(words, auto)
     spans = []
-    for idx in _low_words(fixed, threshold):
+    for idx in _suspect_words(fixed, threshold, tuple(personal)):
         if spans and idx < spans[-1]["j"]:
             continue
         i, j = _widen(fixed, idx, idx + 1, vocabulary)

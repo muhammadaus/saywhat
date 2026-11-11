@@ -62,7 +62,7 @@ def transcribe_utterance(runtime: Runtime, recognizer: Recognizer, file_path: st
                        auto={} if practising else d.auto_corrections(runtime.setting("auto_correct_after")),
                        threshold=runtime.setting("threshold"),
                        max_candidates=runtime.setting("max_candidates"),
-                       alt_text=alt_text, source=source)
+                       alt_text=alt_text, source=source, personal=() if practising else personal)
 
     utterance = build()
     if utterance["spans"] and not practising:

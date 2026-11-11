@@ -66,3 +66,15 @@ def test_two_word_mishearing_widens_span(store):
     u = analyze(words, vocabulary=d.vocabulary(), corrections={}, auto={}, threshold=0.6)
     assert u["spans"][0]["heard"] == "cooper netties"
     assert u["spans"][0]["candidates"][0]["text"] == "Kubernetes"
+
+
+def test_confident_near_miss_of_personal_term_is_questioned():
+    words = [{"w": w, "p": p, "s": 0, "e": 0} for w, p in
+             [("plan", .97), ("with", .99), ("gvector", .93), ("enabled", .95)]]
+    plain = analyze(words, vocabulary=[], corrections={}, auto={}, threshold=0.6)
+    assert plain["spans"] == []
+    u = analyze(words, vocabulary=[("pgvector", ())], corrections={}, auto={}, threshold=0.6,
+                personal=("pgvector",))
+    assert u["spans"][0]["heard"] == "gvector" and u["spans"][0]["candidates"][0]["text"] == "pgvector"
+    assert analyze([{"w": "pgvector", "p": .9, "s": 0, "e": 0}], vocabulary=[("pgvector", ())], corrections={},
+                   auto={}, threshold=0.6, personal=("pgvector",))["spans"] == []
