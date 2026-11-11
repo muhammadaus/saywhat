@@ -49,20 +49,23 @@ def transcribe_utterance(runtime: Runtime, recognizer: Recognizer, file_path: st
     model = model or runtime.setting("model")
     language = language or runtime.setting("language") or None
     device = runtime.setting("device")
-    personal = runtime.dictionary.prompt_terms(30)
+    # While practising, listen like a stranger would: no personal vocabulary, no learned fixes,
+    # so the score reflects how clearly the user is understood, not how well saywhat knows them.
+    practising = bool(runtime.practice_target())
+    personal = [] if practising else runtime.dictionary.prompt_terms(30)
     words = recognizer.words(file_path, model=model, device=device, language=language,
-                             prompt=prompt, hotwords=" ".join(personal) or None)
+                             prompt=None if practising else prompt, hotwords=" ".join(personal) or None)
     d = runtime.dictionary
 
     def build(alt_text=None):
         return analyze(words, vocabulary=d.vocabulary(), corrections=d.corrections(),
-                       auto=d.auto_corrections(runtime.setting("auto_correct_after")),
+                       auto={} if practising else d.auto_corrections(runtime.setting("auto_correct_after")),
                        threshold=runtime.setting("threshold"),
                        max_candidates=runtime.setting("max_candidates"),
                        alt_text=alt_text, source=source)
 
     utterance = build()
-    if utterance["spans"]:
+    if utterance["spans"] and not practising:
         # Second listen, biased toward the terms the first pass might have meant.
         bias = hotword_terms(utterance) + [t for t in personal if t not in hotword_terms(utterance)]
         alt_words = recognizer.words(file_path, model=model, device=device, language=language,

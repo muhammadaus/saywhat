@@ -24,7 +24,7 @@ def make_pre_transcription(rt: Runtime):
     def pre_transcription(prompt=None, **kwargs):
         """Put the personal vocabulary in the recognizer prompt (most important last)."""
         terms = rt.dictionary.prompt_terms(_PROMPT_TERMS)
-        if not terms:
+        if not terms or rt.practice_target():  # practice is scored by a neutral listener
             return None
         vocab = "Vocabulary: " + ", ".join(reversed(terms)) + "."
         return {"prompt": f"{prompt.strip()} {vocab}" if prompt and prompt.strip() else vocab}
