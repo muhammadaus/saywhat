@@ -1,0 +1,167 @@
+# Seed vocabulary of technical terms Whisper commonly mishears.
+# One term per line; optional sound-alike aliases after " | ".
+kubectl | kube control | kube cuttle | cube cuddle
+Kubernetes | cooper netties
+k8s | kates
+EKS
+GKE
+AKS
+ECS
+ECR
+EC2
+S3
+IAM
+VPC
+AWS
+GCP
+Azure
+Terraform
+Ansible
+Helm
+Istio
+Envoy
+nginx | engine x
+Docker
+Dockerfile
+docker-compose
+Podman
+containerd
+etcd | et cetera dee
+Prometheus
+Grafana
+Kafka
+RabbitMQ
+Redis
+PostgreSQL | postgres | post grass
+pgvector | pee gee vector
+MySQL
+SQLite
+MongoDB
+DynamoDB
+Elasticsearch
+ClickHouse
+Supabase
+Firebase
+Vercel
+Netlify
+Cloudflare
+GitHub
+GitLab
+GitHub Actions
+CI/CD
+YAML | yammel
+JSON | jason
+TOML
+gRPC
+GraphQL
+REST
+OAuth
+JWT | jot
+SSH
+TLS
+HTTPS
+DNS
+CORS
+CSRF
+XSS
+API
+SDK
+CLI
+CPU
+GPU
+TPU
+CUDA
+VRAM
+NVMe
+LLM
+RAG
+LoRA
+QLoRA
+GGUF
+vLLM
+llama.cpp
+Ollama
+Hermes
+Nous Research
+Hugging Face
+PyTorch
+TensorFlow
+JAX
+NumPy
+pandas
+scikit-learn
+Jupyter
+pytest
+pip
+uv
+Poetry
+virtualenv
+venv
+npm
+pnpm
+Yarn
+Node.js
+Deno
+Bun
+TypeScript
+JavaScript
+React
+Next.js
+Vue
+Svelte
+Tailwind
+Vite
+webpack
+esbuild
+ESLint
+Prettier
+Rust
+Cargo
+Go
+Golang
+Python
+Kotlin
+Swift
+Xcode
+Neovim
+tmux
+zsh
+Bash
+regex
+async
+await
+mutex
+OAuth2
+webhook
+WebSocket
+localhost
+stdout
+stderr
+stdin
+sudo
+chmod
+chown
+grep
+awk
+sed
+curl
+wget
+rsync
+cron
+systemd
+launchd
+Homebrew
+macOS
+Linux
+Ubuntu
+Debian
+Wayland
+FFmpeg
+Whisper
+faster-whisper
+transformer
+tokenizer
+embeddings
+LangChain
+LlamaIndex
+MCP
