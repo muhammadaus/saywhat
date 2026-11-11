@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import importlib.util
+import os
 import threading
 from typing import Any, Optional
 
@@ -14,6 +15,17 @@ from .runtime import Runtime
 
 NAME = "saywhat"
 MODELS = ("tiny", "base", "small", "medium", "large-v3", "distil-large-v3", "turbo")
+
+
+def is_faster_whisper_model(name: Optional[str]) -> bool:
+    """True for a faster-whisper size name, a Hugging Face repo id or a local model directory.
+    Callers may forward another engine's model id (e.g. OpenAI's "whisper-1"); that is not ours."""
+    if not name:
+        return False
+    if "/" in name or os.path.isdir(name):
+        return True
+    from faster_whisper import available_models
+    return name in available_models()
 
 
 class Recognizer:
@@ -46,7 +58,7 @@ def transcribe_utterance(runtime: Runtime, recognizer: Recognizer, file_path: st
                          model: Optional[str] = None, language: Optional[str] = None,
                          prompt: Optional[str] = None, source: str = "") -> dict:
     """Recognize ``file_path``, re-listen around uncertain words, and return the utterance."""
-    model = model or runtime.setting("whisper_model")
+    model = model if is_faster_whisper_model(model) else runtime.setting("whisper_model")
     language = language or runtime.setting("language") or None
     device = runtime.setting("device")
     # While practising, listen like a stranger would: no personal vocabulary, no learned fixes,

@@ -66,3 +66,9 @@ def test_provider_never_raises(recognizer):
     from saywhat.provider import SaywhatTranscriptionProvider
     out = SaywhatTranscriptionProvider(make_runtime(MemoryStore()), recognizer).transcribe("/nonexistent.wav")
     assert out["success"] is False and out["error"]
+
+
+def test_foreign_model_ids_are_ignored():
+    from saywhat.provider import is_faster_whisper_model
+    assert is_faster_whisper_model("base") and is_faster_whisper_model("Systran/faster-whisper-small")
+    assert not is_faster_whisper_model("whisper-1") and not is_faster_whisper_model(None)
