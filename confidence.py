@@ -79,16 +79,10 @@ def _apply_auto(words: list[dict], auto: dict[str, str]) -> tuple[list[dict], li
     return out, applied
 
 
-def _low_runs(words: list[dict], threshold: float) -> list[tuple[int, int]]:
-    runs, start = [], None
-    for idx, w in enumerate(words + [{"w": "", "p": 1.0}]):
-        low = w["p"] < threshold and not w.get("auto") and norm(w["w"])
-        if low and start is None:
-            start = idx
-        elif not low and start is not None:
-            runs.append((start, idx))
-            start = None
-    return runs
+def _low_words(words: list[dict], threshold: float) -> list[int]:
+    """Indexes of words the recognizer was unsure of (learned fixes and punctuation excluded)."""
+    return [i for i, w in enumerate(words)
+            if w["p"] < threshold and not w.get("auto") and norm(w["w"])]
 
 
 def _alt_replacement(words: list[dict], i: int, j: int, alt_text: str | None) -> str | None:
@@ -96,21 +90,17 @@ def _alt_replacement(words: list[dict], i: int, j: int, alt_text: str | None) ->
     if not alt_text:
         return None
     heard, alt = [w["w"] for w in words], tokens(alt_text)
-    anchor = {}  # heard index -> alt index, for words both passes agree on
+    anchor = {-1: -1, len(heard): len(alt)}  # heard index -> alt index where both passes agree
     for tag, a1, a2, b1, b2 in opcodes(heard, alt):
         if tag == "equal":
             anchor.update({a1 + k: b1 + k for k in range(a2 - a1)})
-    before = max((a for a in anchor if a < i), default=-1)
-    after = min((a for a in anchor if a >= j), default=len(heard))
-    if (before + 1, after) != (i, j) and not all(a in anchor for a in range(i, j)):
-        return None  # the passes disagree on more than this span
-    lo = anchor.get(before, -1) + 1
-    hi = anchor.get(after, len(alt))
-    region = " ".join(alt[lo:hi])
-    return region if region and normalize(region) != normalize(" ".join(heard[before + 1:after])) else None
+    if i - 1 not in anchor or j not in anchor:
+        return None  # the passes also disagree next to this span; can't attribute the change
+    region = " ".join(alt[anchor[i - 1] + 1:anchor[j]])
+    return region if region and normalize(region) != normalize(" ".join(heard[i:j])) else None
 
 
-def _span(words, i, j, vocabulary, corrections, alt_text, max_candidates):
+def _span(words, i, j, vocabulary, corrections, alt_text, max_candidates, threshold):
     heard = _strip_punct(_join(words[i:j]))
     p = min(w["p"] for w in words[i:j])
     cands: dict[str, dict] = {}
@@ -129,11 +119,16 @@ def _span(words, i, j, vocabulary, corrections, alt_text, max_candidates):
 
     for chosen, count in corrections.get(normalize(heard), {}).items():
         offer(chosen, 0.8 + 0.05 * count, f"you picked this {count}x before")
+    # The surer the recognizer was, the closer a sound-alike must be to be worth offering.
+    bar = MIN_MATCH + (1 - MIN_MATCH) * 0.8 * min(p / threshold, 1.0)
     for term, score in _match_terms(heard, vocabulary)[:max_candidates]:
-        offer(term, score, "sounds alike")
+        if score >= bar:
+            offer(term, score, "sounds alike")
     alt = _alt_replacement(words, i, j, alt_text)
     if alt:
-        offer(alt, 0.85, "heard on a vocabulary-biased re-listen")
+        # A partial re-listen ("gvector") supports the term it resembles rather than competing.
+        twin = next((c["text"] for c in cands.values() if similarity(alt, c["text"]) >= 0.85), None)
+        offer(twin or alt, 0.85, "heard on a vocabulary-biased re-listen")
     as_heard = {"text": heard, "score": round(p, 3), "why": "as heard"}
     cands.pop(norm(heard), None)
     ranked = sorted(cands.values(), key=lambda c: -c["score"])[:max(max_candidates - 1, 1)]
@@ -156,7 +151,7 @@ def _widen(words, i, j, vocabulary):
     return i, j
 
 
-def _readings(words: list[dict], spans: list[dict], alt_text: str | None) -> list[str]:
+def _readings(words: list[dict], spans: list[dict]) -> list[str]:
     """Whole-sentence options, most plausible first."""
     def render(choice: dict[int, str]) -> str:
         parts, idx = [], 0
@@ -177,7 +172,7 @@ def _readings(words: list[dict], spans: list[dict], alt_text: str | None) -> lis
         combos.append((score, render({sp["i"]: c["text"] for sp, c in zip(spans, combo)})))
     combos.sort(key=lambda sc: -sc[0])
     readings: list[str] = []
-    for text in [t for _, t in combos[:1]] + ([alt_text] if alt_text else []) + [t for _, t in combos[1:]]:
+    for _, text in combos:
         if text and normalize(text) not in {normalize(r) for r in readings}:
             readings.append(text.strip())
         if len(readings) == MAX_READINGS:
@@ -192,13 +187,13 @@ def analyze(words: list[dict], *, vocabulary, corrections: dict, auto: dict[str,
     raw_text = _join(words)
     fixed, applied = _apply_auto(words, auto)
     spans = []
-    for i, j in _low_runs(fixed, threshold):
-        if spans and i < spans[-1]["j"]:
+    for idx in _low_words(fixed, threshold):
+        if spans and idx < spans[-1]["j"]:
             continue
-        i, j = _widen(fixed, i, j, vocabulary)
+        i, j = _widen(fixed, idx, idx + 1, vocabulary)
         if spans and i < spans[-1]["j"]:
             i = spans[-1]["j"]
-        spans.append(_span(fixed, i, j, vocabulary, corrections, alt_text, max_candidates))
+        spans.append(_span(fixed, i, j, vocabulary, corrections, alt_text, max_candidates, threshold))
     # A span whose only candidate is what was heard has nothing to choose between.
     spans = [sp for sp in spans if len(sp["candidates"]) > 1]
     return {
@@ -210,7 +205,7 @@ def analyze(words: list[dict], *, vocabulary, corrections: dict, auto: dict[str,
         "words": words,
         "auto": applied,
         "spans": spans,
-        "readings": _readings(fixed, spans, alt_text) if spans else [],
+        "readings": _readings(fixed, spans) if spans else [],
         "resolved": False,
     }
 

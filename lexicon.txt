@@ -76,6 +76,7 @@ NVMe
 LLM
 RAG
 LoRA
+Qwen | quinn | queen
 QLoRA
 GGUF
 vLLM
