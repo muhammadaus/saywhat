@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import json
+import os
 import shutil
 import subprocess
 import sys
@@ -14,6 +15,17 @@ from .runtime import Runtime
 
 MAX_TERM_CHARS = 64
 MODEL_SPEED = 0.85  # model pronunciations are played a little slower than normal speech
+AUDIO_EXTENSIONS = {".wav", ".mp3", ".m4a", ".ogg", ".oga", ".opus", ".flac", ".webm", ".aiff", ".aac"}
+
+
+def local_audio_file(path: str) -> str | None:
+    """``path`` as a real local audio file, or None. FFmpeg would also open URLs and devices."""
+    if not path or "://" in path or path.startswith(("-", "pipe:", "concat:", "data:")):
+        return None
+    real = os.path.realpath(os.path.expanduser(path))
+    if os.path.splitext(real)[1].lower() not in AUDIO_EXTENSIONS or not os.path.isfile(real):
+        return None
+    return real
 
 
 def _ok(**data) -> str:
@@ -82,7 +94,10 @@ class Tools:
         if not target:
             return _err("No practice sentence: call with action 'start' and the sentence first.")
         if audio_path:
-            utt = self._transcribe(audio_path)
+            local = local_audio_file(audio_path)
+            if local is None:
+                return _err("audio_path must be an existing local audio file (" + ", ".join(sorted(AUDIO_EXTENSIONS)) + ").")
+            utt = self._transcribe(local)
         else:
             utt = self.rt.last_utterance()
             if not utt or time.time() - utt["ts"] > self.rt.setting("match_window_seconds"):
@@ -110,6 +125,12 @@ class Tools:
 
     # -- saywhat_dictionary ------------------------------------------------------
     def dictionary(self, args: dict, **kwargs) -> str:
+        return self._dictionary(args, user_confirmed=False)
+
+    def _dictionary(self, args: dict, user_confirmed: bool) -> str:
+        """``user_confirmed`` is True only for the user's own /saywhat command. A model-made
+        'teach' counts as one confirmation: the term is offered first next time and becomes
+        automatic only once the user picks it, so injected text cannot silently rewrite dictation."""
         try:
             d = self.rt.dictionary
             action = args.get("action")
@@ -129,8 +150,11 @@ class Tools:
                 heard = (args.get("heard_as") or "").strip()
                 if not heard or len(heard) > MAX_TERM_CHARS:
                     return _err("teach needs heard_as: what recognition produces instead of the term.")
-                d.record_correction(heard, term, weight=self.rt.setting("auto_correct_after"))
-                return _ok(taught={heard: term}, note="Applied automatically from the next recording.")
+                full = self.rt.setting("auto_correct_after")
+                d.record_correction(heard, term, weight=full if user_confirmed else 1)
+                return _ok(taught={heard: term}, note=(
+                    "Applied automatically from the next recording." if user_confirmed else
+                    f"Offered first from now on; automatic after the user confirms it {full - 1} more time(s)."))
             return _err("action must be list, add, remove or teach.")
         except Exception as exc:
             return _err(f"saywhat_dictionary: {exc}")
@@ -147,7 +171,7 @@ class Tools:
             return f'Practising: "{rest}"\nRecord yourself with voice mode; each recording is scored. /saywhat practice stop to end.'
         if verb == "teach" and "=" in rest:
             heard, term = (part.strip() for part in rest.split("=", 1))
-            out = json.loads(self.dictionary({"action": "teach", "term": term, "heard_as": heard}))
+            out = json.loads(self._dictionary({"action": "teach", "term": term, "heard_as": heard}, user_confirmed=True))
             return f'Taught: "{heard}" -> "{term}"' if out["success"] else out["error"]
         if verb == "forget" and rest.strip():
             out = json.loads(self.dictionary({"action": "remove", "term": rest.strip()}))

@@ -28,7 +28,8 @@ def call(handler, **args):
     return json.loads(handler(args, task_id="t"))
 
 
-def test_practice_loop(store):
+def test_practice_loop(store, tmp_path):
+    store_dir = tmp_path
     rt, tools, spoken = make(store)
     start = call(tools.practice, action="start", text=TARGET)
     assert start["success"] and rt.practice_target() == TARGET
@@ -41,7 +42,11 @@ def test_practice_loop(store):
     assert spoken[-1][1]["text"].startswith("kubectl")  # model of the problem words first
     assert "kubectl" in rt.dictionary.terms()  # dictation adapts to the speaker's hard words
 
-    again = call(tools.practice, action="score", audio_path="/any.wav")
+    for bad in ("http://169.254.169.254/x.wav", "/etc/passwd", "/missing.wav", "concat:/a.wav"):
+        assert call(tools.practice, action="score", audio_path=bad)["success"] is False
+    wav = store_dir / "attempt.wav"
+    wav.write_bytes(b"RIFF")
+    again = call(tools.practice, action="score", audio_path=str(wav))
     assert again["attempt"] == 2 and again["change"] == 0
 
     stop = call(tools.practice, action="stop")
@@ -62,7 +67,7 @@ def test_dictionary_actions(store):
     taught = call(tools.dictionary, action="teach", term="EKS", heard_as="x")
     assert taught["success"]
     listed = call(tools.dictionary, action="list")
-    assert listed["automatic"] == {"x": "EKS"}
+    assert listed["automatic"] == {} and listed["mishearings"] == {"x": {"EKS": 1}}  # model-made: not automatic
     assert {t["term"] for t in listed["terms"]} == {"pgvector", "EKS"}
     assert call(tools.dictionary, action="remove", term="pgvector")["existed"] is True
     assert call(tools.dictionary, action="add", term="")["success"] is False
