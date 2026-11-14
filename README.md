@@ -102,8 +102,9 @@ A fix the *model* teaches is offered first but only becomes automatic once you c
   Hermes uses.
 - **Model pronunciations use your configured Hermes TTS** (`text_to_speech`), which may be a cloud
   service; the practice sentence is sent to it. In an interactive terminal the audio is played with
-  the system player (`afplay`, `ffplay`, `paplay` or `aplay`) as a short detached process. Nothing
-  is played on headless gateway hosts.
+  the system player (`afplay`, `ffplay`, `paplay` or `aplay`) as a short detached process. On
+  gateway hosts (Telegram, Discord, …) nothing is played on the server; the agent attaches the audio
+  to its reply instead.
 - **Stored data** (profile-scoped, in Hermes `plugin-data`): your dictionary and learned
   mishearings, the most recent transcript with word timings (never audio), practice scores and
   hardest words. Remove a term with `/saywhat forget`.
