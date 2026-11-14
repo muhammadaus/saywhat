@@ -9,7 +9,6 @@ from __future__ import annotations
 
 import time
 import uuid
-from itertools import product
 
 from .align import norm, normalize, opcodes, tokens
 from .phonetics import similarity
@@ -18,6 +17,7 @@ MIN_MATCH = 0.7          # sound-alike score needed to offer a vocabulary term
 WINDOW_BONUS = 0.8       # a two-word window must score this well to widen a span
 AUTO_TRUST = 0.9         # never auto-correct a word the recognizer was this sure of
 MAX_READINGS = 3         # leaves the 4th clarify slot for "pick word by word"
+READINGS_BEAM = MAX_READINGS * 4  # spare room for readings that dedupe to the same text
 PERSONAL_HEARD = 0.995   # above every other candidate (capped at 0.99): the user's own term, heard
 PERSONAL_NEAR_MISS = 0.9  # confident words this close to a personal term are still questioned
 NEIGHBOUR_MAX_P = 0.95   # only a not-quite-sure neighbour may join a span
@@ -176,16 +176,16 @@ def _readings(words: list[dict], spans: list[dict]) -> list[str]:
         parts.extend(w["w"] for w in words[idx:])
         return " ".join(parts)
 
-    options = [sp["candidates"][:3] for sp in spans]
-    combos = []
-    for combo in product(*options):
-        score = 1.0
-        for c in combo:
-            score *= c["score"]
-        combos.append((score, render({sp["i"]: c["text"] for sp, c in zip(spans, combo)})))
-    combos.sort(key=lambda sc: -sc[0])
+    # Beam over spans: the score is a product of per-span scores, so keeping the best few partial
+    # choices at each span finds the same top readings as trying every combination, in linear time.
+    beam: list[tuple[float, tuple[str, ...]]] = [(1.0, ())]
+    for sp in spans:
+        beam = sorted(((score * c["score"], picked + (c["text"],))
+                       for score, picked in beam for c in sp["candidates"][:3]),
+                      key=lambda sc: -sc[0])[:READINGS_BEAM]
     readings: list[str] = []
-    for _, text in combos:
+    for _, picked in beam:
+        text = render({sp["i"]: t for sp, t in zip(spans, picked)})
         if text and normalize(text) not in {normalize(r) for r in readings}:
             readings.append(text.strip())
         if len(readings) == MAX_READINGS:

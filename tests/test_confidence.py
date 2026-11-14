@@ -85,3 +85,18 @@ def test_hearing_a_personal_term_is_not_second_guessed():
     u = analyze(words, vocabulary=[("EKS", ()), ("X", ())], corrections={"eks": {"X": 1}}, auto={},
                 threshold=0.6, alt_text="the X cluster", personal=("EKS",))
     assert u["spans"] == []
+
+
+def test_many_uncertain_words_still_produce_readings_quickly(store):
+    import time
+    # A long, noisy voice note: 30 mumbled "x"s, each a span with several candidates.
+    noisy = [{"w": w, "p": p, "s": 0.0, "e": 0.0}
+             for _ in range(30) for w, p in (("deploy", .99), ("x", .34))]
+    d = PersonalDictionary(store)
+    start = time.perf_counter()
+    u = analyze(noisy, vocabulary=d.vocabulary(), corrections=d.corrections(), auto={},
+                threshold=0.6, max_candidates=4)
+    assert time.perf_counter() - start < 2.0
+    assert len(u["spans"]) == 30
+    assert 1 < len(u["readings"]) <= 3
+    assert u["readings"][0] == " ".join(["deploy " + u["spans"][0]["candidates"][0]["text"]] * 30)
