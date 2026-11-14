@@ -65,7 +65,12 @@ class Tools:
             subprocess.Popen(player + [path], stdin=subprocess.DEVNULL, stdout=subprocess.DEVNULL,
                              stderr=subprocess.DEVNULL, start_new_session=True)
             played = True
-        return {"file": path, "media_tag": out.get("media_tag"), "played_locally": played}
+        model = {"file": path, "media_tag": out.get("media_tag"), "played_locally": played}
+        if not played and model["media_tag"]:
+            # Gateways (Telegram, Discord, ...) only send audio named in the reply itself.
+            model["deliver"] = (f"Put this tag on its own line in your reply so the user hears the model "
+                                f"pronunciation: {model['media_tag']}")
+        return model
 
     # -- saywhat_practice --------------------------------------------------------
     def practice(self, args: dict, **kwargs) -> str:

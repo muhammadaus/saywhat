@@ -97,3 +97,22 @@ def test_setting_keys_avoid_hermes_reserved_roots():
     # PluginContext.get_config rejects these roots (hermes_cli/plugins_state.py).
     from saywhat.runtime import DEFAULTS
     assert not {k.split(".")[0] for k in DEFAULTS} & {"model", "plugins", "security", "settings"}
+
+
+def test_headless_model_pronunciation_is_handed_to_the_reply(store, monkeypatch):
+    monkeypatch.setattr("sys.stdin.isatty", lambda: False)  # a gateway host: Telegram, Discord, ...
+    rt, tools, _ = make(store)
+    model = call(tools.practice, action="start", text=TARGET)["model"]
+    assert model["played_locally"] is False
+    assert "MEDIA:/tmp/model.mp3" in model["deliver"]
+
+
+def test_locally_played_pronunciation_is_not_sent_again(store, monkeypatch):
+    import saywhat.tools as tools_mod
+    monkeypatch.setattr("sys.stdin.isatty", lambda: True)
+    monkeypatch.setattr(tools_mod, "_player", lambda: ["afplay"])
+    monkeypatch.setattr(tools_mod.subprocess, "Popen", lambda *a, **kw: None)
+    rt, tools, _ = make(store)
+    model = call(tools.practice, action="start", text=TARGET)["model"]
+    assert model["played_locally"] is True
+    assert "deliver" not in model
